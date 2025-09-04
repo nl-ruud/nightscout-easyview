@@ -1,5 +1,6 @@
 """Nightscout uploader for CGM data from Medtrum Easyview."""
 
+import functools
 import hashlib
 import logging
 import pathlib
@@ -16,10 +17,33 @@ from requests.exceptions import ConnectionError, ReadTimeout
 logger = logging.getLogger(__name__)
 
 
+def with_retry(delay: int):
+    """Decorator to retry on session Timeout or ConnectionError."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except ReadTimeout:
+                    logger.info("EasyView API timeout, retrying in 30 seconds")
+                    time.sleep(delay)
+                except ConnectionError:
+                    logger.info("EasyView API connection error, retrying in 30 seconds")
+                    time.sleep(delay)
+
+        return wrapper
+
+    return decorator
+
+
 class EasyFollow:
     """Class that interacts with the EasyFollow API to get CGM data."""
 
     BASE_URL = "https://easyview.medtrum.eu/mobile/ajax"
+
+    last_seq: int | None = None
 
     def __init__(
         self, username: str, password: str, last_timestamp: datetime | None = None
@@ -59,83 +83,67 @@ class EasyFollow:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def __iter__(self):
-        logger.info("start polling EasyView")
-        prev_seq = None
-        start = self.last_timestamp
-        while True:
-            seq, ns = self.parse_cgm_status(self.status())
-            end = datetime.fromtimestamp(round(ns["date"] / 1000), tz=timezone.utc)
-            if start is None:
-                start = end - timedelta(hours=48)
+    def _missed_cgm_data(self, current_timestamp):
+        """Return missed CGM data from EasyView history."""
+        for seq, entry in map(
+            self.parse_cgm_hist,
+            self.history(
+                self.last_timestamp + timedelta(seconds=30),
+                current_timestamp - timedelta(seconds=30),
+            ),
+        ):
+            timestamp = datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc)
+            yield seq, timestamp, entry
 
-            if seq != prev_seq:
-                if end > start:
-                    if prev_seq is None or seq != prev_seq + 1:
-                        for hist_seq, hist_ns in map(
-                            self.parse_cgm_hist, self.history(start, end)
-                        ):
-                            if prev_seq is None or prev_seq < hist_seq < seq:
-                                if prev_seq is not None and prev_seq + 1 != hist_seq:
-                                    logger.warning(
-                                        "missed CGM entries between %i and %i",
-                                        prev_seq,
-                                        hist_seq,
-                                    )
-                                logger.info("processed CGM entry %i", hist_seq)
-                                yield hist_ns
-                                prev_seq = hist_seq
-                    if prev_seq is not None and prev_seq + 1 != seq:
-                        logger.warning(
-                            "missed CGM entries between %i and %i", prev_seq, seq
-                        )
-                    logger.info("processed CGM entry %i", seq)
-                    yield ns
-                    prev_seq = seq
-                else:
-                    logger.debug(
-                        "skipped CGM entry %i as it was already processed", seq
-                    )
-                start = datetime.fromtimestamp(
-                    round(ns["date"] / 1000), tz=timezone.utc
-                )
-                time.sleep(max(150 + round(ns["date"] / 1000) - time.time(), 30))
-            else:
+    def _cgm_stream(self):
+        """Poll CGM data from EasyView indefinitely."""
+        while True:
+            seq, entry = self.parse_cgm_status(self.status())
+            timestamp = datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc)
+            if self.last_timestamp is None:
+                self.last_timestamp = timestamp - timedelta(hours=48)
+
+            if self.last_seq is None and timestamp <= self.last_timestamp:
+                logger.info("resuming from CGM entry %i (already processed)", seq)
+                self.last_seq = seq
+                continue
+
+            if seq == self.last_seq:
                 logger.debug("no new CGM entry on EasyView, retrying in 30 seconds")
                 time.sleep(30)
+            else:
+                if seq - 1 != self.last_seq:
+                    yield from self._missed_cgm_data(timestamp)
+                yield seq, timestamp, entry
+                time.sleep(max(150 + entry["date"] / 1000 - time.time(), 30))
 
+    def __iter__(self):
+        logger.info("start polling EasyView")
+        for seq, timestamp, entry in self._cgm_stream():
+            if self.last_seq is not None and seq != self.last_seq + 1:
+                for i in range(self.last_seq + 1, seq):
+                    logger.warning("missed CGM entry %i", i)
+            logger.info("processed CGM entry %i", seq)
+            self.last_seq = seq
+            self.last_timestamp = timestamp
+            yield entry
+
+    @with_retry(delay=30)
     def post(self, endpoint: str, data: dict) -> dict[str, Any]:
         """Send a POST request to the specified endpoint with the given data."""
-        while True:
-            try:
-                response = self.session.post(
-                    f"{self.BASE_URL}/{endpoint}", data=data, timeout=10
-                )
-                response.raise_for_status()
-                break
-            except ReadTimeout:
-                logger.info("EasyView API timeout, retrying in 30 seconds")
-                time.sleep(30)
-            except ConnectionError:
-                logger.info("EasyView API connection error, retrying in 30 seconds")
-                time.sleep(30)
+        response = self.session.post(
+            f"{self.BASE_URL}/{endpoint}", data=data, timeout=10
+        )
+        response.raise_for_status()
         return response.json()
 
+    @with_retry(delay=30)
     def get(self, endpoint: str, params: dict | None = None) -> dict[str, Any]:
         """Send a GET request to the specified endpoint with the given parameters."""
-        while True:
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/{endpoint}", params=params, timeout=10
-                )
-                response.raise_for_status()
-                break
-            except ReadTimeout:
-                logger.info("EasyView API timeout, retrying in 30 seconds")
-                time.sleep(30)
-            except ConnectionError:
-                logger.info("EasyView API connection error, retrying in 30 seconds")
-                time.sleep(30)
+        response = self.session.get(
+            f"{self.BASE_URL}/{endpoint}", params=params, timeout=10
+        )
+        response.raise_for_status()
         return response.json()
 
     def open(self) -> None:
