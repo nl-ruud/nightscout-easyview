@@ -12,7 +12,6 @@ from typing import Any
 
 import requests
 import yaml
-from requests.exceptions import ConnectionError, ReadTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +25,9 @@ def with_retry(delay: int):
             while True:
                 try:
                     return func(*args, **kwargs)
-                except ReadTimeout:
+                except requests.exceptions.ReadTimeout:
                     logger.info("Network timeout, retrying in 30 seconds")
-                except ConnectionError:
+                except requests.exceptions.ConnectionError:
                     logger.info("Network connection error, retrying in 30 seconds")
                 time.sleep(delay)
 
