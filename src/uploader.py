@@ -106,6 +106,7 @@ class EasyFollow:
             if self.last_seq is None and timestamp <= self.last_timestamp:
                 logger.info("resuming from CGM entry %i (already processed)", seq)
                 self.last_seq = seq
+                time.sleep(max(150 + entry["date"] / 1000 - time.time(), 30))
                 continue
 
             if seq == self.last_seq:
@@ -290,7 +291,7 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s - %(levelname)-7s - %(message)s",
     )
     main()
