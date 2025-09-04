@@ -7,7 +7,6 @@ import pathlib
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from functools import cached_property
 from typing import Any
 
 import requests
@@ -58,7 +57,7 @@ class EasyFollow:
         )
         self.last_timestamp = last_timestamp
 
-    @cached_property
+    @functools.cached_property
     def cgm_username(self) -> str:
         """Get the username from the user carrying the CGM."""
         status = self.get("logindata")
@@ -66,7 +65,7 @@ class EasyFollow:
             raise ValueError("Follower should have only one CGM user.")
         return status["monitorlist"][0]["username"]
 
-    @cached_property
+    @functools.cached_property
     def device(self) -> str:
         """Get the device type from the EasyFollow API."""
         status = self.get("logindata")
