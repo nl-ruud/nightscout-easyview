@@ -272,20 +272,7 @@ class NightScout:
 
 
 def main():
-    """Main function to sync CGM data from EasyView to Nightscout.
-
-    Credentials are read from ~/.nightscout_easyview/secrets.yaml
-    The file should have the following structure:
-
-    easyview:
-        username: <*follower* email address>
-        password: <*follower* password>
-
-    nightscout:
-        url: <nightscout url>
-        secret: <nightscout api secret>
-
-    """
+    """Main function to sync CGM data from EasyView to Nightscout."""
 
     secrets_file = pathlib.Path.home() / ".nightscout_easyview/secrets.yaml"
     with secrets_file.open(encoding="utf-8") as f:
