@@ -27,11 +27,10 @@ def with_retry(delay: int):
                 try:
                     return func(*args, **kwargs)
                 except ReadTimeout:
-                    logger.info("EasyView API timeout, retrying in 30 seconds")
-                    time.sleep(delay)
+                    logger.info("Network timeout, retrying in 30 seconds")
                 except ConnectionError:
-                    logger.info("EasyView API connection error, retrying in 30 seconds")
-                    time.sleep(delay)
+                    logger.info("Network connection error, retrying in 30 seconds")
+                time.sleep(delay)
 
         return wrapper
 
@@ -119,6 +118,7 @@ class EasyFollow:
                 time.sleep(max(150 + entry["date"] / 1000 - time.time(), 30))
 
     def __iter__(self):
+        """Yield Nightscout CGM entries from EasyView indefinitely."""
         logger.info("start polling EasyView")
         for seq, timestamp, entry in self._cgm_stream():
             if self.last_seq is not None and seq > self.last_seq + 1:
