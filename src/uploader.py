@@ -260,21 +260,13 @@ class NightScout:
             return datetime.fromtimestamp(data[0]["date"] / 1000, tz=timezone.utc)
         return None
 
+    @with_retry(delay=30)
     def add(self, entry) -> dict[str, Any]:
         """Add a CGM entry to Nightscout."""
-        while True:
-            try:
-                response = self.session.post(
-                    f"{self.url}/api/v1/entries.json", json=[entry], timeout=10
-                )
-                response.raise_for_status()
-                break
-            except ReadTimeout:
-                logger.info("Nightscout timeout, retrying in 30 seconds")
-                time.sleep(30)
-            except ConnectionError:
-                logger.info("Nightscout connection error, retrying in 30 seconds")
-                time.sleep(30)
+        response = self.session.post(
+            f"{self.url}/api/v1/entries.json", json=[entry], timeout=10
+        )
+        response.raise_for_status()
         logger.info("submitted CGM entry to nightscout")
         return response.json()
 
