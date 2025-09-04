@@ -120,7 +120,7 @@ class EasyFollow:
     def __iter__(self):
         logger.info("start polling EasyView")
         for seq, timestamp, entry in self._cgm_stream():
-            if self.last_seq is not None and seq != self.last_seq + 1:
+            if self.last_seq is not None and seq > self.last_seq + 1:
                 for i in range(self.last_seq + 1, seq):
                     logger.warning("missed CGM entry %i", i)
             logger.info("processed CGM entry %i", seq)
