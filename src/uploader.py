@@ -381,7 +381,7 @@ class NightScout:
 
     @property
     def timestamp(self) -> datetime | None:
-        """Get last CGM entry timestamp from Nightscout."""
+        """Get last sensor value timestamp from Nightscout."""
         response = self.session.get(
             f"{self.url}/api/v1/entries.json", params={"count": 1}, timeout=10
         )
@@ -393,7 +393,7 @@ class NightScout:
 
     @with_retry(delay=30)
     def add(self, sensor_status: SensorStatus) -> dict[str, Any]:
-        """Add a CGM entry to Nightscout."""
+        """Add a sensor value to Nightscout."""
         response = self.session.post(
             f"{self.url}/api/v1/entries.json",
             json=[sensor_status.nightscout_entry],
@@ -401,7 +401,7 @@ class NightScout:
         )
         response.raise_for_status()
         logger.info(
-            "submitted CGM entry to nightscout (sensor=%i, sequence=%i)",
+            "submitted sensor value to nightscout (sensor=%i, sequence=%i)",
             sensor_status.sensor_id,
             sensor_status.sequence,
         )
@@ -428,7 +428,7 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format="%(asctime)s - %(levelname)-7s - %(message)s",
     )
     main()
