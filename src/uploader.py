@@ -187,7 +187,7 @@ class EasyFollow:
     def __init__(
         self, username: str, password: str, timestamp: datetime | None = None
     ) -> None:
-        """Initialize EasyFollow with username, password and optional resume timestamp."""
+        """Initialize with username, password and optional resume timestamp."""
         self.username = username
         self.password = password
         self.session: requests.Session = requests.Session()
@@ -333,26 +333,25 @@ class EasyFollow:
             if delta > 0:
                 time.sleep(delta)
             self._next_interval = datetime.now(timezone.utc) + timedelta(seconds=30)
-            try:
-                raw_status = self.get_status()["monitorlist"][0]["sensor_status"]
-                new_stat = SensorStatus.from_easyview(raw_status)
-                if new_stat.key == cur_stat.key:
-                    logger.debug(
-                        "no new data on Easyview (sensor=%i, sequence=%i)",
-                        cur_stat.sensor_id,
-                        cur_stat.sequence,
-                    )
-                    continue
-                if new_stat.preceding_key != cur_stat.key:
-                    for s in self.history(cur_stat.timestamp, new_stat.timestamp):
-                        if new_stat.key > s.key > cur_stat.key:
-                            self._queue.append(s)
-                self._queue.append(new_stat)
-                self._next_interval = max(
-                    new_stat.timestamp + timedelta(seconds=150), self._next_interval
+
+            raw_status = self.get_status()["monitorlist"][0]["sensor_status"]
+            new_stat = SensorStatus.from_easyview(raw_status)
+            if new_stat.key == cur_stat.key:
+                logger.debug(
+                    "no new data on Easyview (sensor=%i, sequence=%i)",
+                    cur_stat.sensor_id,
+                    cur_stat.sequence,
                 )
-            except ValueError:
-                raise
+                continue
+            if new_stat.preceding_key != cur_stat.key:
+                for s in self.history(cur_stat.timestamp, new_stat.timestamp):
+                    if new_stat.key > s.key > cur_stat.key:
+                        self._queue.append(s)
+            self._queue.append(new_stat)
+            self._next_interval = max(
+                new_stat.timestamp + timedelta(seconds=150), self._next_interval
+            )
+
         self.sensor_status = self._queue.pop(0)
         return self.sensor_status
 
