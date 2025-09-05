@@ -211,6 +211,39 @@ class EasyFollow:
         """Context manager exit, closes connection to EasyView."""
         self.close()
 
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> SensorStatus:
+        """Returns next SensorStatus from EasyView"""
+        while not self._queue:
+            cur_stat = self.sensor_status
+            delta = (self._next_interval - datetime.now(timezone.utc)).total_seconds()
+            if delta > 0:
+                time.sleep(delta)
+            self._next_interval = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+            raw_status = self.get_status()["monitorlist"][0]["sensor_status"]
+            new_stat = SensorStatus.from_easyview(raw_status)
+            if new_stat.key == cur_stat.key:
+                logger.debug(
+                    "no new data on EasyView (sensor=%i, sequence=%i)",
+                    cur_stat.sensor_id,
+                    cur_stat.sequence,
+                )
+                continue
+            if new_stat.preceding_key != cur_stat.key:
+                for s in self.history(cur_stat.timestamp, new_stat.timestamp):
+                    if new_stat.key > s.key > cur_stat.key:
+                        self._queue.append(s)
+            self._queue.append(new_stat)
+            self._next_interval = max(
+                new_stat.timestamp + timedelta(seconds=150), self._next_interval
+            )
+
+        self.sensor_status = self._queue.pop(0)
+        return self.sensor_status
+
     @with_retry(delay=10)
     def _post(self, endpoint: str, data: dict) -> dict[str, Any]:
         """Send a POST request to the specified endpoint with the given data."""
@@ -324,39 +357,6 @@ class EasyFollow:
                 yield SensorStatus.from_download(rec, device_type=device_type)
             except ValueError:
                 pass
-
-    def __next__(self) -> SensorStatus:
-        """Returns next SensorStatus from EasyView"""
-        while not self._queue:
-            cur_stat = self.sensor_status
-            delta = (self._next_interval - datetime.now(timezone.utc)).total_seconds()
-            if delta > 0:
-                time.sleep(delta)
-            self._next_interval = datetime.now(timezone.utc) + timedelta(seconds=30)
-
-            raw_status = self.get_status()["monitorlist"][0]["sensor_status"]
-            new_stat = SensorStatus.from_easyview(raw_status)
-            if new_stat.key == cur_stat.key:
-                logger.debug(
-                    "no new data on EasyView (sensor=%i, sequence=%i)",
-                    cur_stat.sensor_id,
-                    cur_stat.sequence,
-                )
-                continue
-            if new_stat.preceding_key != cur_stat.key:
-                for s in self.history(cur_stat.timestamp, new_stat.timestamp):
-                    if new_stat.key > s.key > cur_stat.key:
-                        self._queue.append(s)
-            self._queue.append(new_stat)
-            self._next_interval = max(
-                new_stat.timestamp + timedelta(seconds=150), self._next_interval
-            )
-
-        self.sensor_status = self._queue.pop(0)
-        return self.sensor_status
-
-    def __iter__(self) -> Self:
-        return self
 
 
 class NightScout:
