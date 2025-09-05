@@ -1,4 +1,4 @@
-"""Nightscout uploader for CGM data from Medtrum Easyview."""
+"""Nightscout uploader for CGM data from Medtrum EasyView."""
 
 from __future__ import annotations
 
@@ -167,9 +167,9 @@ def with_retry(delay: int):
                 try:
                     return func(*args, **kwargs)
                 except requests.exceptions.ReadTimeout:
-                    logger.info("Network timeout, retrying in 30 seconds")
+                    logger.info("Network timeout, retrying")
                 except requests.exceptions.ConnectionError:
-                    logger.info("Network connection error, retrying in 30 seconds")
+                    logger.info("Network connection error, retrying")
                 time.sleep(delay)
 
         return wrapper
@@ -178,7 +178,7 @@ def with_retry(delay: int):
 
 
 class EasyFollow:
-    """Class that interacts with the EasyFollow API to get CGM data."""
+    """Class that interacts with the EasyView API from a Follow account."""
 
     BASE_URL = "https://easyview.medtrum.eu/mobile/ajax"
 
@@ -203,12 +203,12 @@ class EasyFollow:
         self._next_interval = datetime.now(timezone.utc)
 
     def __enter__(self):
-        """Context manager entry, opens connection to EasyFollow API."""
+        """Context manager entry, opens connection to EasyView."""
         self.open()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit, closes connection to EasyFollow API."""
+        """Context manager exit, closes connection to EasyView."""
         self.close()
 
     @with_retry(delay=10)
@@ -231,7 +231,7 @@ class EasyFollow:
 
     @functools.cached_property
     def cgm_username(self) -> str:
-        """Get the username from the user carrying the CGM."""
+        """Get the username of the user carrying the CGM."""
         status = self.get_status()
         return status["monitorlist"][0]["username"]
 
@@ -245,7 +245,7 @@ class EasyFollow:
                     "Follower should have exactly one CGM user, got %i",
                     len(status["monitorlist"]),
                 )
-                raise ValueError("Follower should have exactly one CGM user.")
+                raise ValueError("Account should follow exactly one CGM user.")
             self._sensor_status = SensorStatus.from_easyview(
                 status["monitorlist"][0]["sensor_status"]
             )
@@ -285,7 +285,7 @@ class EasyFollow:
         )
 
     def open(self) -> None:
-        """Establish a connection to the EasyFollow API."""
+        """Establish a connection to EasyView."""
         data = {
             "apptype": "Follow",
             "user_name": self.username,
@@ -297,16 +297,16 @@ class EasyFollow:
         logger.info("logged in to EasyView as %s", self.username)
 
     def close(self) -> None:
-        """Close the connection to the Easyview API."""
+        """Closes the connection to EasyView."""
         logger.info("closed connection to EasyView")
         self.session.close()
 
     def get_status(self) -> dict[str, Any]:
-        """Get CGM data from the EasyFollow API."""
+        """Get CGM data from the EasyView API."""
         return self._get("logindata")
 
     def get_downloads(self, start: datetime, end: datetime) -> dict[str, Any]:
-        """Get historical sensor status data from Easyview API."""
+        """Get historical sensor status data from EasyView API."""
         params = {
             "flag": "sg",
             "st": (start + timedelta(seconds=30)).strftime("%Y-%m-%d %H:%M:%S"),
@@ -319,14 +319,14 @@ class EasyFollow:
         """Returns iterator of SensorStatus objects for requested period."""
         downloads = self.get_downloads(start, end)["data"]
         device_type = self.sensor_status.device_type
-        for rec in downloads:
+        for rec in map(tuple, downloads):
             try:
                 yield SensorStatus.from_download(rec, device_type=device_type)
             except ValueError:
                 pass
 
     def __next__(self) -> SensorStatus:
-        """Returns next SensorStatus from Easyview"""
+        """Returns next SensorStatus from EasyView"""
         while not self._queue:
             cur_stat = self.sensor_status
             delta = (self._next_interval - datetime.now(timezone.utc)).total_seconds()
@@ -338,7 +338,7 @@ class EasyFollow:
             new_stat = SensorStatus.from_easyview(raw_status)
             if new_stat.key == cur_stat.key:
                 logger.debug(
-                    "no new data on Easyview (sensor=%i, sequence=%i)",
+                    "no new data on EasyView (sensor=%i, sequence=%i)",
                     cur_stat.sensor_id,
                     cur_stat.sequence,
                 )
