@@ -40,6 +40,7 @@ class SensorStatus:
 
         WARMING_UP = 2
         NORMAL = 3
+        NEEDS_CALIBRATION = 10
 
     @property
     def unix_timestamp(self) -> int:
@@ -129,7 +130,15 @@ class SensorStatus:
             sensor_id=int(match.group("sensorId")),
             sequence=int(match.group("sequence")),
             serial=int(match.group("serial")),
-            status=cls.Status.NORMAL if record[4] == "C" else cls.Status.WARMING_UP,
+            status=(
+                cls.Status.NORMAL
+                if record[4] == "C"
+                else (
+                    cls.Status.NEEDS_CALIBRATION
+                    if record[4] == "XC"
+                    else cls.Status.WARMING_UP if record[4] == "H" else None
+                )
+            ),
             update_time=record[1],
         )
 
@@ -343,7 +352,7 @@ class EasyFollow:
                     new_stat.timestamp + timedelta(seconds=150), self._next_interval
                 )
             except ValueError:
-                pass
+                raise
         self.sensor_status = self._queue.pop(0)
         return self.sensor_status
 
@@ -414,7 +423,7 @@ def main():
     with NightScout(ns_url, api_secret) as ns:
         with EasyFollow(username, password, ns.timestamp) as ef:
             for sensor_status in ef:
-                if sensor_status.status is SensorStatus.Status.NORMAL:
+                if sensor_status.status is not SensorStatus.Status.WARMING_UP:
                     ns.add(sensor_status)
 
 
