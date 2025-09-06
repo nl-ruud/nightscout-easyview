@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Iterator, Self
+from typing import Any, Iterator
 
 import requests
 import yaml
@@ -123,6 +123,11 @@ class SensorStatus:
         match = re.match(pattern, record[0])
         if not match:
             raise ValueError("invalid EasyView download record")
+        status = {
+            "C": cls.Status.NORMAL,
+            "H": cls.Status.WARMING_UP,
+            "XC": cls.Status.NEEDS_CALIBRATION,
+        }
         return cls(
             device_type=device_type,
             glucose=record[3],
@@ -130,15 +135,7 @@ class SensorStatus:
             sensor_id=int(match.group("sensorId")),
             sequence=int(match.group("sequence")),
             serial=int(match.group("serial")),
-            status=(
-                cls.Status.NORMAL
-                if record[4] == "C"
-                else (
-                    cls.Status.NEEDS_CALIBRATION
-                    if record[4] == "XC"
-                    else cls.Status.WARMING_UP if record[4] == "H" else None
-                )
-            ),
+            status=status.get(record[4]),
             update_time=record[1],
         )
 
@@ -211,7 +208,7 @@ class EasyFollow:
         """Context manager exit, closes connection to EasyView."""
         self.close()
 
-    def __iter__(self) -> Self:
+    def __iter__(self) -> Iterator[SensorStatus]:
         return self
 
     def __next__(self) -> SensorStatus:
