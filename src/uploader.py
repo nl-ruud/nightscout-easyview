@@ -388,7 +388,7 @@ class NightScout:
             return datetime.fromtimestamp(data[0]["date"] / 1000, tz=timezone.utc)
         return None
 
-    @with_retry(delay=30)
+    @with_retry(delay=10)
     def add(self, sensor_status: SensorStatus) -> dict[str, Any]:
         """Add a sensor value to Nightscout."""
         response = self.session.post(
