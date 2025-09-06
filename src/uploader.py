@@ -389,20 +389,26 @@ class NightScout:
         return None
 
     @with_retry(delay=10)
-    def add(self, sensor_status: SensorStatus) -> dict[str, Any]:
+    def add(self, sensor_status: SensorStatus) -> None:
         """Add a sensor value to Nightscout."""
-        response = self.session.post(
-            f"{self.url}/api/v1/entries.json",
-            json=[sensor_status.nightscout_entry],
-            timeout=10,
-        )
-        response.raise_for_status()
-        logger.info(
-            "submitted sensor value to nightscout (sensor=%i, sequence=%i)",
-            sensor_status.sensor_id,
-            sensor_status.sequence,
-        )
-        return response.json()
+        if sensor_status.Status is SensorStatus.Status.WARMING_UP:
+            logger.info(
+                "sensor is warming up (sensor=%i, sequence=%i)",
+                sensor_status.sensor_id,
+                sensor_status.sequence,
+            )
+        else:
+            response = self.session.post(
+                f"{self.url}/api/v1/entries.json",
+                json=[sensor_status.nightscout_entry],
+                timeout=10,
+            )
+            response.raise_for_status()
+            logger.info(
+                "submitted sensor status to nightscout (sensor=%i, sequence=%i)",
+                sensor_status.sensor_id,
+                sensor_status.sequence,
+            )
 
 
 def main():
@@ -419,8 +425,7 @@ def main():
     with NightScout(ns_url, api_secret) as ns:
         with EasyFollow(username, password, ns.timestamp) as ef:
             for sensor_status in ef:
-                if sensor_status.status is not SensorStatus.Status.WARMING_UP:
-                    ns.add(sensor_status)
+                ns.add(sensor_status)
 
 
 if __name__ == "__main__":
