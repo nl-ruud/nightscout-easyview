@@ -98,6 +98,16 @@ class SensorStatus:
     @classmethod
     def from_easyview(cls, data: dict[str, Any]) -> SensorStatus:
         """Create a SensorStatus from EasyView sensor_status dictionary."""
+        try:
+            status = cls.Status(data["status"])
+        except ValueError:
+            logger.warning(
+                "Unknown status '%s' (sensor=%i, sequence=%i)",
+                data["status"],
+                data["sensorId"],
+                data["sequence"],
+            )
+            status = None
         return cls(
             app_name=data["appName"],
             battery_percent=data["batteryPercent"],
@@ -108,7 +118,7 @@ class SensorStatus:
             sensor_id=data["sensorId"],
             sequence=data["sequence"],
             serial=data["serial"],
-            status=cls.Status(data["status"]),
+            status=status,
             update_time=data["updateTime"],
         )
 
@@ -128,6 +138,13 @@ class SensorStatus:
             "H": cls.Status.WARMING_UP,
             "XC": cls.Status.NEEDS_CALIBRATION,
         }
+        if record[4] not in status:
+            logger.warning(
+                "Unknown status '%s' in EasyView download record (sensor=%i, sequence=%i)",
+                record[4],
+                int(match.group("sensorId")),
+                int(match.group("sequence")),
+            )
         return cls(
             device_type=device_type,
             glucose=record[3],

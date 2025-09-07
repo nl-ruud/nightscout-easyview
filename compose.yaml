@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  uploader:
+    build: .
+    container_name: nightscout-easyview
+    volumes:
+      - .env:/home/appuser/.nightscout_easyview:ro
+    restart: unless-stopped
