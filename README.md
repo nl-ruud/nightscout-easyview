@@ -29,7 +29,7 @@ Medtrum devices but want their data available in Nightscout.
 
 Credentials are read from `~/.nightscout_easyview/secrets.yaml`.
 
-When building as a Docker container, the container mounts ~/.nightscout_easyview from the host .env directory.
+Note: when building as a Docker container, the container mounts the host .env directory as ~/.nightscout_easyview.
 
 The file should have the following structure:
 
