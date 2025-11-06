@@ -237,11 +237,8 @@ class EasyFollow:
                 time.sleep(delta)
             self._next_interval = datetime.now(timezone.utc) + timedelta(seconds=30)
             raw_status = self.get_status()
-            if "monitorlist" not in raw_status or not raw_status["monitorlist"]:
-                if raw_status.get("res") == "ERR":
-                    logger.error("Easyview API returned: %s.", raw_status.get("msg"))
-                else:
-                    logger.warning("no CGM user found in EasyView account")
+            if raw_status.get("res") == "ERR":
+                logger.error("Easyview API returned: %s.", raw_status.get("msg"))
                 continue
             if "sensor_status" not in raw_status["monitorlist"][0]:
                 logger.warning("no active sensor found in EasyView account")
