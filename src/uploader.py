@@ -236,9 +236,16 @@ class EasyFollow:
             if delta > 0:
                 time.sleep(delta)
             self._next_interval = datetime.now(timezone.utc) + timedelta(seconds=30)
-
-            raw_status = self.get_status()["monitorlist"][0]["sensor_status"]
-            new_stat = SensorStatus.from_easyview(raw_status)
+            raw_status = self.get_status()
+            if "monitorlist" not in raw_status or not raw_status["monitorlist"]:
+                logger.warning("no CGM user found in EasyView account")
+                continue
+            if "sensor_status" not in raw_status["monitorlist"][0]:
+                logger.warning("no active sensor found in EasyView account")
+                continue
+            new_stat = SensorStatus.from_easyview(
+                raw_status["monitorlist"][0]["sensor_status"]
+            )
             if new_stat.key == cur_stat.key:
                 logger.debug(
                     "no new data on EasyView (sensor=%i, sequence=%i)",
